@@ -1,0 +1,113 @@
+services:
+  # =============================================================================
+  # Database
+  # =============================================================================
+  db:
+    image: postgres:16-alpine
+    container_name: cartpilot-db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-cartpilot}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-cartpilot_dev_password}
+      POSTGRES_DB: ${POSTGRES_DB:-cartpilot}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-cartpilot}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - cartpilot-network
+
+  # =============================================================================
+  # CartPilot Core API
+  # =============================================================================
+  cartpilot-api:
+    build:
+      context: ./cartpilot-api
+      dockerfile: Dockerfile
+    container_name: cartpilot-api
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://cartpilot:cartpilot_dev_password@db:5432/cartpilot}
+      CARTPILOT_API_KEY: ${CARTPILOT_API_KEY:-dev-api-key-change-in-production}
+      WEBHOOK_SECRET: ${WEBHOOK_SECRET:-dev-webhook-secret-change-in-production}
+      MERCHANT_A_URL: ${MERCHANT_A_URL:-http://merchant-a:8001}
+      MERCHANT_A_ID: ${MERCHANT_A_ID:-merchant-a}
+      MERCHANT_A_ENABLED: ${MERCHANT_A_ENABLED:-true}
+      MERCHANT_B_URL: ${MERCHANT_B_URL:-http://merchant-b:8002}
+      MERCHANT_B_ID: ${MERCHANT_B_ID:-merchant-b}
+      MERCHANT_B_ENABLED: ${MERCHANT_B_ENABLED:-true}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      DEBUG: ${DEBUG:-true}
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - cartpilot-network
+
+  # =============================================================================
+  # Merchant Simulator A (Happy Path)
+  # =============================================================================
+  merchant-a:
+    build:
+      context: ./merchant-a
+      dockerfile: Dockerfile
+    container_name: merchant-a
+    environment:
+      MERCHANT_ID: ${MERCHANT_A_ID:-merchant-a}
+      WEBHOOK_URL: ${CARTPILOT_WEBHOOK_URL:-http://cartpilot-api:8000/webhooks/merchant}
+      WEBHOOK_SECRET: ${WEBHOOK_SECRET:-dev-webhook-secret-change-in-production}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    ports:
+      - "8001:8001"
+    networks:
+      - cartpilot-network
+
+  # =============================================================================
+  # Merchant Simulator B (Chaos Mode)
+  # =============================================================================
+  merchant-b:
+    build:
+      context: ./merchant-b
+      dockerfile: Dockerfile
+    container_name: merchant-b
+    environment:
+      MERCHANT_ID: ${MERCHANT_B_ID:-merchant-b}
+      WEBHOOK_URL: ${CARTPILOT_WEBHOOK_URL:-http://cartpilot-api:8000/webhooks/merchant}
+      WEBHOOK_SECRET: ${WEBHOOK_SECRET:-dev-webhook-secret-change-in-production}
+      CHAOS_ENABLED: ${CHAOS_ENABLED:-false}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    ports:
+      - "8002:8002"
+    networks:
+      - cartpilot-network
+
+  # =============================================================================
+  # MCP Server
+  # =============================================================================
+  cartpilot-mcp:
+    build:
+      context: ./cartpilot-mcp
+      dockerfile: Dockerfile
+    container_name: cartpilot-mcp
+    environment:
+      CARTPILOT_API_URL: http://cartpilot-api:8000
+      CARTPILOT_API_KEY: ${CARTPILOT_API_KEY:-dev-api-key-change-in-production}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    ports:
+      - "8003:8003"
+    depends_on:
+      - cartpilot-api
+    networks:
+      - cartpilot-network
+
+volumes:
+  postgres_data:
+
+networks:
+  cartpilot-network:
+    driver: bridge
