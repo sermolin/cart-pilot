@@ -14,6 +14,9 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 from app.infrastructure.config import settings
 from app.infrastructure.database import Base
 
+# Import all models to register them with Base.metadata
+from app.catalog.models import Product, ProductVariant  # noqa: F401
+
 # Alembic Config object
 config = context.config
 
