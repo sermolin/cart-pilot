@@ -283,6 +283,133 @@ _APPROVAL_TRANSITIONS: dict[ApprovalStatus, set[ApprovalStatus]] = {
 
 
 # ============================================================================
+# Checkout State Machine
+# ============================================================================
+
+
+class CheckoutStatus(str, Enum):
+    """Checkout session lifecycle states.
+
+    State diagram:
+        [*] ─────────────────────────────────────────────► CANCELLED
+         │                                                    ▲
+         │ create                                             │
+         ▼                                                    │
+        CREATED ──────────────────────────────────────────────┤
+         │                                                    │
+         │ quote                                              │
+         ▼                                                    │
+        QUOTED ───────────────────────────────────────────────┤
+         │                                                    │
+         │ request_approval                                   │
+         ▼                                                    │
+        AWAITING_APPROVAL ────────────────────────────────────┤
+         │       │                                            │
+         │       │ price_changed → back to QUOTED             │
+         │       │                                            │
+         │ approve                                            │
+         ▼                                                    │
+        APPROVED ─────────────────────────────────────────────┤
+         │       │                                            │
+         │       │ timeout                                    │
+         │       ▼                                            │
+         │     FAILED ────────────────────────────────────────┘
+         │
+         │ confirm
+         ▼
+        CONFIRMED ◄─────────────────────────────────────────
+    """
+
+    CREATED = "created"
+    QUOTED = "quoted"
+    AWAITING_APPROVAL = "awaiting_approval"
+    APPROVED = "approved"
+    CONFIRMED = "confirmed"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+    def can_transition_to(self, target: "CheckoutStatus") -> bool:
+        """Check if transition to target state is valid.
+
+        Args:
+            target: Target state to transition to.
+
+        Returns:
+            True if transition is valid.
+        """
+        return target in _CHECKOUT_TRANSITIONS.get(self, set())
+
+    def allowed_transitions(self) -> list["CheckoutStatus"]:
+        """Get list of valid target states.
+
+        Returns:
+            List of states that can be transitioned to.
+        """
+        return list(_CHECKOUT_TRANSITIONS.get(self, set()))
+
+    def is_terminal(self) -> bool:
+        """Check if this is a terminal (final) state.
+
+        Returns:
+            True if no further transitions are possible.
+        """
+        return len(_CHECKOUT_TRANSITIONS.get(self, set())) == 0
+
+    def is_cancellable(self) -> bool:
+        """Check if checkout can be cancelled.
+
+        Returns:
+            True if checkout can be cancelled.
+        """
+        return self in {
+            CheckoutStatus.CREATED,
+            CheckoutStatus.QUOTED,
+            CheckoutStatus.AWAITING_APPROVAL,
+            CheckoutStatus.APPROVED,
+        }
+
+    def is_quotable(self) -> bool:
+        """Check if a new quote can be requested.
+
+        Returns:
+            True if quote can be requested.
+        """
+        return self in {CheckoutStatus.CREATED, CheckoutStatus.QUOTED}
+
+    def requires_reapproval(self) -> bool:
+        """Check if price change would require re-approval.
+
+        Returns:
+            True if in state that needs re-approval on price change.
+        """
+        return self in {CheckoutStatus.AWAITING_APPROVAL, CheckoutStatus.APPROVED}
+
+
+# Checkout state transitions
+_CHECKOUT_TRANSITIONS: dict[CheckoutStatus, set[CheckoutStatus]] = {
+    CheckoutStatus.CREATED: {CheckoutStatus.QUOTED, CheckoutStatus.CANCELLED},
+    CheckoutStatus.QUOTED: {
+        CheckoutStatus.AWAITING_APPROVAL,
+        CheckoutStatus.CANCELLED,
+    },
+    CheckoutStatus.AWAITING_APPROVAL: {
+        CheckoutStatus.APPROVED,
+        CheckoutStatus.QUOTED,  # price changed - back to quoted
+        CheckoutStatus.CANCELLED,
+    },
+    CheckoutStatus.APPROVED: {
+        CheckoutStatus.CONFIRMED,
+        CheckoutStatus.FAILED,
+        CheckoutStatus.QUOTED,  # price changed - back to quoted
+        CheckoutStatus.CANCELLED,
+    },
+    CheckoutStatus.CONFIRMED: set(),  # Terminal state
+    CheckoutStatus.FAILED: set(),  # Terminal state
+    CheckoutStatus.CANCELLED: set(),  # Terminal state
+}
+
+
+# ============================================================================
 # State Transition Result
 # ============================================================================
 
@@ -405,6 +532,31 @@ def validate_approval_transition(
         raise InvalidStateTransitionError(
             entity_type="Approval",
             entity_id=approval_id,
+            current_state=current_status.value,
+            target_state=target_status.value,
+            allowed_transitions=[s.value for s in current_status.allowed_transitions()],
+        )
+
+
+def validate_checkout_transition(
+    checkout_id: str,
+    current_status: CheckoutStatus,
+    target_status: CheckoutStatus,
+) -> None:
+    """Validate and raise if checkout state transition is invalid.
+
+    Args:
+        checkout_id: Checkout identifier for error message.
+        current_status: Current checkout status.
+        target_status: Target checkout status.
+
+    Raises:
+        InvalidStateTransitionError: If transition is not valid.
+    """
+    if not current_status.can_transition_to(target_status):
+        raise InvalidStateTransitionError(
+            entity_type="Checkout",
+            entity_id=checkout_id,
             current_state=current_status.value,
             target_state=target_status.value,
             allowed_transitions=[s.value for s in current_status.allowed_transitions()],

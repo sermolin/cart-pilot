@@ -421,6 +421,220 @@ class ApprovalExpired(DomainEvent):
 
 
 # ============================================================================
+# Intent Events
+# ============================================================================
+
+
+@dataclass(frozen=True)
+class IntentCreated(DomainEvent):
+    """Event raised when a purchase intent is created."""
+
+    event_type: ClassVar[str] = "intent.created"
+
+    intent_id: str = ""
+    query: str = ""
+    session_id: str | None = None
+
+    def _payload(self) -> dict[str, Any]:
+        """Get event-specific payload."""
+        return {
+            "intent_id": self.intent_id,
+            "query": self.query,
+            "session_id": self.session_id,
+        }
+
+
+@dataclass(frozen=True)
+class OffersCollected(DomainEvent):
+    """Event raised when offers are collected for an intent."""
+
+    event_type: ClassVar[str] = "intent.offers_collected"
+
+    intent_id: str = ""
+    offer_count: int = 0
+    merchant_ids: list[str] = field(default_factory=list)
+
+    def _payload(self) -> dict[str, Any]:
+        """Get event-specific payload."""
+        return {
+            "intent_id": self.intent_id,
+            "offer_count": self.offer_count,
+            "merchant_ids": self.merchant_ids,
+        }
+
+
+# ============================================================================
+# Checkout Events
+# ============================================================================
+
+
+@dataclass(frozen=True)
+class CheckoutCreated(DomainEvent):
+    """Event raised when a checkout session is created from an offer."""
+
+    event_type: ClassVar[str] = "checkout.created"
+
+    checkout_id: str = ""
+    offer_id: str = ""
+    merchant_id: str = ""
+
+    def _payload(self) -> dict[str, Any]:
+        """Get event-specific payload."""
+        return {
+            "checkout_id": self.checkout_id,
+            "offer_id": self.offer_id,
+            "merchant_id": self.merchant_id,
+        }
+
+
+@dataclass(frozen=True)
+class CheckoutQuoted(DomainEvent):
+    """Event raised when a quote is received for a checkout."""
+
+    event_type: ClassVar[str] = "checkout.quoted"
+
+    checkout_id: str = ""
+    total_cents: int = 0
+    currency: str = "USD"
+    receipt_hash: str = ""
+    merchant_checkout_id: str = ""
+
+    def _payload(self) -> dict[str, Any]:
+        """Get event-specific payload."""
+        return {
+            "checkout_id": self.checkout_id,
+            "total_cents": self.total_cents,
+            "currency": self.currency,
+            "receipt_hash": self.receipt_hash,
+            "merchant_checkout_id": self.merchant_checkout_id,
+        }
+
+
+@dataclass(frozen=True)
+class CheckoutApprovalRequested(DomainEvent):
+    """Event raised when approval is requested for a checkout."""
+
+    event_type: ClassVar[str] = "checkout.approval_requested"
+
+    checkout_id: str = ""
+    total_cents: int = 0
+    currency: str = "USD"
+    frozen_receipt_hash: str = ""
+
+    def _payload(self) -> dict[str, Any]:
+        """Get event-specific payload."""
+        return {
+            "checkout_id": self.checkout_id,
+            "total_cents": self.total_cents,
+            "currency": self.currency,
+            "frozen_receipt_hash": self.frozen_receipt_hash,
+        }
+
+
+@dataclass(frozen=True)
+class CheckoutApproved(DomainEvent):
+    """Event raised when a checkout is approved."""
+
+    event_type: ClassVar[str] = "checkout.approved"
+
+    checkout_id: str = ""
+    approved_by: str = ""
+    approved_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+
+    def _payload(self) -> dict[str, Any]:
+        """Get event-specific payload."""
+        return {
+            "checkout_id": self.checkout_id,
+            "approved_by": self.approved_by,
+            "approved_at": self.approved_at.isoformat(),
+        }
+
+
+@dataclass(frozen=True)
+class CheckoutConfirmed(DomainEvent):
+    """Event raised when a checkout is confirmed (purchase executed)."""
+
+    event_type: ClassVar[str] = "checkout.confirmed"
+
+    checkout_id: str = ""
+    merchant_order_id: str = ""
+    total_cents: int = 0
+    currency: str = "USD"
+    confirmed_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+
+    def _payload(self) -> dict[str, Any]:
+        """Get event-specific payload."""
+        return {
+            "checkout_id": self.checkout_id,
+            "merchant_order_id": self.merchant_order_id,
+            "total_cents": self.total_cents,
+            "currency": self.currency,
+            "confirmed_at": self.confirmed_at.isoformat(),
+        }
+
+
+@dataclass(frozen=True)
+class CheckoutReapprovalRequired(DomainEvent):
+    """Event raised when price change requires re-approval."""
+
+    event_type: ClassVar[str] = "checkout.reapproval_required"
+
+    checkout_id: str = ""
+    original_total_cents: int = 0
+    new_total_cents: int = 0
+    currency: str = "USD"
+    reason: str = ""
+
+    def _payload(self) -> dict[str, Any]:
+        """Get event-specific payload."""
+        return {
+            "checkout_id": self.checkout_id,
+            "original_total_cents": self.original_total_cents,
+            "new_total_cents": self.new_total_cents,
+            "currency": self.currency,
+            "reason": self.reason,
+        }
+
+
+@dataclass(frozen=True)
+class CheckoutFailed(DomainEvent):
+    """Event raised when a checkout fails."""
+
+    event_type: ClassVar[str] = "checkout.failed"
+
+    checkout_id: str = ""
+    error_code: str = ""
+    error_message: str = ""
+
+    def _payload(self) -> dict[str, Any]:
+        """Get event-specific payload."""
+        return {
+            "checkout_id": self.checkout_id,
+            "error_code": self.error_code,
+            "error_message": self.error_message,
+        }
+
+
+@dataclass(frozen=True)
+class CheckoutCancelled(DomainEvent):
+    """Event raised when a checkout is cancelled."""
+
+    event_type: ClassVar[str] = "checkout.cancelled"
+
+    checkout_id: str = ""
+    reason: str = ""
+    cancelled_by: str = ""
+
+    def _payload(self) -> dict[str, Any]:
+        """Get event-specific payload."""
+        return {
+            "checkout_id": self.checkout_id,
+            "reason": self.reason,
+            "cancelled_by": self.cancelled_by,
+        }
+
+
+# ============================================================================
 # Webhook Events
 # ============================================================================
 
@@ -519,6 +733,18 @@ EVENT_REGISTRY: dict[str, type[DomainEvent]] = {
     ApprovalGranted.event_type: ApprovalGranted,
     ApprovalRejected.event_type: ApprovalRejected,
     ApprovalExpired.event_type: ApprovalExpired,
+    # Checkout events
+    CheckoutCreated.event_type: CheckoutCreated,
+    CheckoutQuoted.event_type: CheckoutQuoted,
+    CheckoutApprovalRequested.event_type: CheckoutApprovalRequested,
+    CheckoutApproved.event_type: CheckoutApproved,
+    CheckoutConfirmed.event_type: CheckoutConfirmed,
+    CheckoutReapprovalRequired.event_type: CheckoutReapprovalRequired,
+    CheckoutFailed.event_type: CheckoutFailed,
+    CheckoutCancelled.event_type: CheckoutCancelled,
+    # Intent events
+    IntentCreated.event_type: IntentCreated,
+    OffersCollected.event_type: OffersCollected,
     # Webhook events
     WebhookReceived.event_type: WebhookReceived,
     WebhookProcessed.event_type: WebhookProcessed,

@@ -257,3 +257,134 @@ class NegativeMoneyError(MoneyError):
             f"Money amount cannot be negative: {amount}",
             details={"amount": amount},
         )
+
+
+# ============================================================================
+# Checkout Errors
+# ============================================================================
+
+
+class CheckoutError(DomainError):
+    """Base class for checkout-related errors."""
+
+    pass
+
+
+class CheckoutNotFoundError(CheckoutError):
+    """Raised when a checkout is not found."""
+
+    def __init__(self, checkout_id: str) -> None:
+        """Initialize checkout not found error.
+
+        Args:
+            checkout_id: ID of the checkout.
+        """
+        super().__init__(
+            f"Checkout not found: {checkout_id}",
+            details={"checkout_id": checkout_id},
+        )
+
+
+class ReapprovalRequiredError(CheckoutError):
+    """Raised when price change requires re-approval.
+
+    This error indicates that the frozen receipt no longer matches
+    the current quote and the user must re-approve.
+    """
+
+    def __init__(
+        self,
+        checkout_id: str,
+        original_total_cents: int,
+        new_total_cents: int,
+        reason: str = "Price changed since approval",
+    ) -> None:
+        """Initialize reapproval required error.
+
+        Args:
+            checkout_id: ID of the checkout.
+            original_total_cents: Original approved total.
+            new_total_cents: New total after price change.
+            reason: Reason for re-approval.
+        """
+        super().__init__(
+            f"Re-approval required for checkout {checkout_id}: {reason}",
+            details={
+                "checkout_id": checkout_id,
+                "original_total_cents": original_total_cents,
+                "new_total_cents": new_total_cents,
+                "reason": reason,
+            },
+        )
+
+
+class CheckoutExpiredError(CheckoutError):
+    """Raised when trying to act on an expired checkout."""
+
+    def __init__(self, checkout_id: str) -> None:
+        """Initialize checkout expired error.
+
+        Args:
+            checkout_id: ID of the checkout.
+        """
+        super().__init__(
+            f"Checkout {checkout_id} has expired",
+            details={"checkout_id": checkout_id},
+        )
+
+
+class CheckoutAlreadyConfirmedError(CheckoutError):
+    """Raised when trying to modify an already confirmed checkout."""
+
+    def __init__(self, checkout_id: str, merchant_order_id: str) -> None:
+        """Initialize checkout already confirmed error.
+
+        Args:
+            checkout_id: ID of the checkout.
+            merchant_order_id: Merchant's order ID.
+        """
+        super().__init__(
+            f"Checkout {checkout_id} is already confirmed with order {merchant_order_id}",
+            details={
+                "checkout_id": checkout_id,
+                "merchant_order_id": merchant_order_id,
+            },
+        )
+
+
+class CheckoutNotQuotedError(CheckoutError):
+    """Raised when trying to approve a checkout that hasn't been quoted."""
+
+    def __init__(self, checkout_id: str, current_status: str) -> None:
+        """Initialize checkout not quoted error.
+
+        Args:
+            checkout_id: ID of the checkout.
+            current_status: Current status of the checkout.
+        """
+        super().__init__(
+            f"Checkout {checkout_id} must be quoted before approval (current: {current_status})",
+            details={
+                "checkout_id": checkout_id,
+                "current_status": current_status,
+            },
+        )
+
+
+class CheckoutNotApprovedError(CheckoutError):
+    """Raised when trying to confirm a checkout that hasn't been approved."""
+
+    def __init__(self, checkout_id: str, current_status: str) -> None:
+        """Initialize checkout not approved error.
+
+        Args:
+            checkout_id: ID of the checkout.
+            current_status: Current status of the checkout.
+        """
+        super().__init__(
+            f"Checkout {checkout_id} must be approved before confirmation (current: {current_status})",
+            details={
+                "checkout_id": checkout_id,
+                "current_status": current_status,
+            },
+        )

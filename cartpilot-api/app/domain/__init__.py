@@ -31,7 +31,19 @@ Example usage:
 from app.domain.base import AggregateRoot, DomainEvent, Entity, ValueObject
 
 # Entities
-from app.domain.entities import Approval, Cart, CartItem, Order, OrderItem
+from app.domain.entities import (
+    Approval,
+    AuditEntry,
+    Cart,
+    CartItem,
+    Checkout,
+    CheckoutItem,
+    Intent,
+    Offer,
+    OfferItem,
+    Order,
+    OrderItem,
+)
 
 # Domain Events
 from app.domain.events import (
@@ -49,6 +61,16 @@ from app.domain.events import (
     CartItemQuantityUpdated,
     CartItemRemoved,
     CartSubmitted,
+    CheckoutApprovalRequested,
+    CheckoutApproved,
+    CheckoutCancelled,
+    CheckoutConfirmed,
+    CheckoutCreated,
+    CheckoutFailed,
+    CheckoutQuoted,
+    CheckoutReapprovalRequired,
+    IntentCreated,
+    OffersCollected,
     OrderCancelled,
     OrderConfirmed,
     OrderCreated,
@@ -70,6 +92,12 @@ from app.domain.exceptions import (
     CartError,
     CartItemNotFoundError,
     CartNotEditableError,
+    CheckoutAlreadyConfirmedError,
+    CheckoutError,
+    CheckoutExpiredError,
+    CheckoutNotApprovedError,
+    CheckoutNotFoundError,
+    CheckoutNotQuotedError,
     CurrencyMismatchError,
     DomainError,
     InvalidQuantityError,
@@ -78,16 +106,19 @@ from app.domain.exceptions import (
     NegativeMoneyError,
     OrderError,
     OrderNotCancellableError,
+    ReapprovalRequiredError,
 )
 
 # State Machines
 from app.domain.state_machines import (
     ApprovalStatus,
     CartStatus,
+    CheckoutStatus,
     OrderStatus,
     StateTransition,
     validate_approval_transition,
     validate_cart_transition,
+    validate_checkout_transition,
     validate_order_transition,
 )
 
@@ -97,9 +128,14 @@ from app.domain.value_objects import (
     ApprovalId,
     CartId,
     CartItemId,
+    CheckoutId,
     CustomerInfo,
+    FrozenReceipt,
+    FrozenReceiptItem,
+    IntentId,
     MerchantId,
     Money,
+    OfferId,
     OrderId,
     ProductId,
     ProductRef,
@@ -114,8 +150,14 @@ __all__ = [
     "ValueObject",
     # Entities
     "Approval",
+    "AuditEntry",
     "Cart",
     "CartItem",
+    "Checkout",
+    "CheckoutItem",
+    "Intent",
+    "Offer",
+    "OfferItem",
     "Order",
     "OrderItem",
     # Value Objects
@@ -123,9 +165,14 @@ __all__ = [
     "ApprovalId",
     "CartId",
     "CartItemId",
+    "CheckoutId",
     "CustomerInfo",
+    "FrozenReceipt",
+    "FrozenReceiptItem",
+    "IntentId",
     "MerchantId",
     "Money",
+    "OfferId",
     "OrderId",
     "ProductId",
     "ProductRef",
@@ -133,10 +180,12 @@ __all__ = [
     # State Machines
     "ApprovalStatus",
     "CartStatus",
+    "CheckoutStatus",
     "OrderStatus",
     "StateTransition",
     "validate_approval_transition",
     "validate_cart_transition",
+    "validate_checkout_transition",
     "validate_order_transition",
     # Domain Events - Cart
     "CartCreated",
@@ -160,6 +209,18 @@ __all__ = [
     "ApprovalGranted",
     "ApprovalRejected",
     "ApprovalExpired",
+    # Domain Events - Checkout
+    "CheckoutCreated",
+    "CheckoutQuoted",
+    "CheckoutApprovalRequested",
+    "CheckoutApproved",
+    "CheckoutConfirmed",
+    "CheckoutReapprovalRequired",
+    "CheckoutFailed",
+    "CheckoutCancelled",
+    # Domain Events - Intent
+    "IntentCreated",
+    "OffersCollected",
     # Domain Events - Webhook
     "WebhookReceived",
     "WebhookProcessed",
@@ -180,6 +241,13 @@ __all__ = [
     "ApprovalError",
     "ApprovalExpiredError",
     "ApprovalAlreadyResolvedError",
+    "CheckoutError",
+    "CheckoutNotFoundError",
+    "ReapprovalRequiredError",
+    "CheckoutExpiredError",
+    "CheckoutAlreadyConfirmedError",
+    "CheckoutNotQuotedError",
+    "CheckoutNotApprovedError",
     "MoneyError",
     "CurrencyMismatchError",
     "NegativeMoneyError",

@@ -167,6 +167,84 @@ class ApprovalId(ValueObject):
 
 
 @dataclass(frozen=True)
+class IntentId(ValueObject):
+    """Strongly-typed intent identifier.
+
+    Intents represent a user's purchase intention from a text query.
+    """
+
+    value: UUID
+
+    @classmethod
+    def generate(cls) -> Self:
+        """Generate a new intent ID.
+
+        Returns:
+            New IntentId with random UUID.
+        """
+        return cls(value=uuid4())
+
+    @classmethod
+    def from_string(cls, value: str) -> Self:
+        """Create IntentId from string representation.
+
+        Args:
+            value: String UUID representation.
+
+        Returns:
+            IntentId instance.
+        """
+        return cls(value=UUID(value))
+
+    def __str__(self) -> str:
+        """Return string representation.
+
+        Returns:
+            UUID as string.
+        """
+        return str(self.value)
+
+
+@dataclass(frozen=True)
+class OfferId(ValueObject):
+    """Strongly-typed offer identifier.
+
+    Offers represent a merchant's response with price and availability.
+    """
+
+    value: UUID
+
+    @classmethod
+    def generate(cls) -> Self:
+        """Generate a new offer ID.
+
+        Returns:
+            New OfferId with random UUID.
+        """
+        return cls(value=uuid4())
+
+    @classmethod
+    def from_string(cls, value: str) -> Self:
+        """Create OfferId from string representation.
+
+        Args:
+            value: String UUID representation.
+
+        Returns:
+            OfferId instance.
+        """
+        return cls(value=UUID(value))
+
+    def __str__(self) -> str:
+        """Return string representation.
+
+        Returns:
+            UUID as string.
+        """
+        return str(self.value)
+
+
+@dataclass(frozen=True)
 class MerchantId(ValueObject):
     """Strongly-typed merchant identifier.
 
@@ -187,6 +265,42 @@ class MerchantId(ValueObject):
         """Validate merchant ID format."""
         if not self.value or not self.value.strip():
             raise ValueError("Merchant ID cannot be empty")
+
+
+@dataclass(frozen=True)
+class CheckoutId(ValueObject):
+    """Strongly-typed checkout session identifier."""
+
+    value: UUID
+
+    @classmethod
+    def generate(cls) -> Self:
+        """Generate a new checkout ID.
+
+        Returns:
+            New CheckoutId with random UUID.
+        """
+        return cls(value=uuid4())
+
+    @classmethod
+    def from_string(cls, value: str) -> Self:
+        """Create CheckoutId from string representation.
+
+        Args:
+            value: String UUID representation.
+
+        Returns:
+            CheckoutId instance.
+        """
+        return cls(value=UUID(value))
+
+    def __str__(self) -> str:
+        """Return string representation.
+
+        Returns:
+            UUID as string.
+        """
+        return str(self.value)
 
 
 @dataclass(frozen=True)
@@ -513,3 +627,134 @@ class WebhookPayload(ValueObject):
             raise ValueError("Idempotency key cannot be empty")
         if not self.event_type:
             raise ValueError("Event type cannot be empty")
+
+
+# ============================================================================
+# Frozen Receipt
+# ============================================================================
+
+
+@dataclass(frozen=True)
+class FrozenReceiptItem(ValueObject):
+    """An item in a frozen receipt snapshot.
+
+    Attributes:
+        product_id: Product identifier.
+        variant_id: Variant identifier if applicable.
+        sku: Stock keeping unit.
+        title: Product title at time of freeze.
+        unit_price_cents: Unit price at time of freeze.
+        quantity: Ordered quantity.
+        currency: Currency code.
+    """
+
+    product_id: str
+    sku: str
+    title: str
+    unit_price_cents: int
+    quantity: int
+    currency: str = "USD"
+    variant_id: str | None = None
+
+    @property
+    def line_total_cents(self) -> int:
+        """Calculate line total in cents."""
+        return self.unit_price_cents * self.quantity
+
+
+@dataclass(frozen=True)
+class FrozenReceipt(ValueObject):
+    """Frozen receipt for approval flow.
+
+    A FrozenReceipt captures the exact state of a checkout at the time
+    approval was requested. It's used to detect price changes that would
+    require re-approval.
+
+    Attributes:
+        hash: SHA-256 hash of the receipt contents.
+        items: Frozen snapshot of checkout items.
+        subtotal_cents: Subtotal at time of freeze.
+        tax_cents: Tax at time of freeze.
+        shipping_cents: Shipping at time of freeze.
+        total_cents: Total at time of freeze.
+        currency: Currency code.
+        frozen_at: When the receipt was frozen.
+    """
+
+    hash: str
+    items: tuple[FrozenReceiptItem, ...]
+    subtotal_cents: int
+    tax_cents: int
+    shipping_cents: int
+    total_cents: int
+    currency: str
+    frozen_at: str  # ISO format datetime string
+
+    @classmethod
+    def create(
+        cls,
+        items: list[FrozenReceiptItem],
+        subtotal_cents: int,
+        tax_cents: int,
+        shipping_cents: int,
+        total_cents: int,
+        currency: str = "USD",
+    ) -> "FrozenReceipt":
+        """Create a frozen receipt with computed hash.
+
+        Args:
+            items: List of receipt items.
+            subtotal_cents: Subtotal amount.
+            tax_cents: Tax amount.
+            shipping_cents: Shipping amount.
+            total_cents: Total amount.
+            currency: Currency code.
+
+        Returns:
+            FrozenReceipt with computed hash.
+        """
+        import hashlib
+        from datetime import datetime, timezone
+
+        # Build hash data
+        items_data = "|".join(
+            f"{i.product_id}:{i.variant_id or ''}:{i.quantity}:{i.unit_price_cents}"
+            for i in items
+        )
+        hash_input = f"{total_cents}|{currency}|{items_data}"
+        receipt_hash = hashlib.sha256(hash_input.encode()).hexdigest()[:16]
+
+        frozen_at = datetime.now(timezone.utc).isoformat()
+
+        return cls(
+            hash=receipt_hash,
+            items=tuple(items),
+            subtotal_cents=subtotal_cents,
+            tax_cents=tax_cents,
+            shipping_cents=shipping_cents,
+            total_cents=total_cents,
+            currency=currency,
+            frozen_at=frozen_at,
+        )
+
+    def matches_total(self, current_total_cents: int) -> bool:
+        """Check if current total matches frozen total.
+
+        Args:
+            current_total_cents: Current checkout total.
+
+        Returns:
+            True if totals match.
+        """
+        return self.total_cents == current_total_cents
+
+    def get_price_difference(self, current_total_cents: int) -> int:
+        """Get difference between frozen and current total.
+
+        Args:
+            current_total_cents: Current checkout total.
+
+        Returns:
+            Difference in cents (positive if current is higher).
+        """
+        return current_total_cents - self.total_cents
