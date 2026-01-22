@@ -14,10 +14,12 @@ from fastapi.responses import JSONResponse
 
 from app.api.checkouts import router as checkouts_router
 from app.api.health import router as health_router
+from app.api.idempotency import setup_idempotency_middleware
 from app.api.intents import router as intents_router
 from app.api.merchants import router as merchants_router
 from app.api.middleware import setup_middleware
 from app.api.offers import router as offers_router
+from app.api.webhooks import router as webhooks_router
 from app.infrastructure.config import settings
 from app.infrastructure.merchant_client import get_merchant_registry
 
@@ -76,12 +78,16 @@ app.add_middleware(
 # Setup custom middleware (request ID, API key auth, error handling)
 setup_middleware(app)
 
+# Setup idempotency middleware
+setup_idempotency_middleware(app)
+
 # Include routers
 app.include_router(health_router, tags=["Health"])
 app.include_router(intents_router)
 app.include_router(offers_router)
 app.include_router(checkouts_router)
 app.include_router(merchants_router)
+app.include_router(webhooks_router)
 
 
 # ============================================================================

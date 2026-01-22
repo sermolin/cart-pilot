@@ -96,6 +96,7 @@ PUBLIC_PATHS = {
     "/docs",
     "/redoc",
     "/openapi.json",
+    "/webhooks/merchant",  # Webhooks use HMAC signature instead of API key
 }
 
 
