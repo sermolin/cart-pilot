@@ -30,8 +30,11 @@ class WebhookEventType(str, Enum):
     CHECKOUT_FAILED = "checkout.failed"
     CHECKOUT_EXPIRED = "checkout.expired"
     ORDER_CREATED = "order.created"
+    ORDER_CONFIRMED = "order.confirmed"
     ORDER_SHIPPED = "order.shipped"
     ORDER_DELIVERED = "order.delivered"
+    ORDER_CANCELLED = "order.cancelled"
+    ORDER_REFUNDED = "order.refunded"
     PRICE_CHANGED = "price.changed"
     STOCK_CHANGED = "stock.changed"
 
@@ -397,8 +400,7 @@ class WebhookService:
     async def _handle_event(self, event: WebhookEvent) -> None:
         """Handle event based on type.
 
-        This is where we would update checkout/order state
-        based on merchant events.
+        Updates checkout/order state based on merchant events.
 
         Args:
             event: The event to handle.
@@ -407,8 +409,11 @@ class WebhookService:
             WebhookEventType.CHECKOUT_CONFIRMED: self._handle_checkout_confirmed,
             WebhookEventType.CHECKOUT_FAILED: self._handle_checkout_failed,
             WebhookEventType.ORDER_CREATED: self._handle_order_created,
+            WebhookEventType.ORDER_CONFIRMED: self._handle_order_confirmed,
             WebhookEventType.ORDER_SHIPPED: self._handle_order_shipped,
             WebhookEventType.ORDER_DELIVERED: self._handle_order_delivered,
+            WebhookEventType.ORDER_CANCELLED: self._handle_order_cancelled,
+            WebhookEventType.ORDER_REFUNDED: self._handle_order_refunded,
             WebhookEventType.PRICE_CHANGED: self._handle_price_changed,
             WebhookEventType.STOCK_CHANGED: self._handle_stock_changed,
         }
@@ -453,25 +458,124 @@ class WebhookService:
         )
         # In production: create order entity
 
+    async def _handle_order_confirmed(self, event: WebhookEvent) -> None:
+        """Handle order confirmed event from merchant."""
+        from app.application.order_service import get_order_service
+
+        merchant_order_id = event.data.get("merchant_order_id")
+        logger.info(
+            "Order confirmed by merchant",
+            merchant_order_id=merchant_order_id,
+        )
+
+        # Update order status
+        order_service = get_order_service()
+        result = await order_service.get_order_by_merchant_order_id(
+            event.merchant_id, merchant_order_id
+        )
+        if result.order:
+            await order_service.confirm_order(
+                order_id=result.order.id,
+                actor="merchant_webhook",
+            )
+
     async def _handle_order_shipped(self, event: WebhookEvent) -> None:
         """Handle order shipped event."""
+        from app.application.order_service import get_order_service
+
         merchant_order_id = event.data.get("merchant_order_id")
         tracking_number = event.data.get("tracking_number")
+        carrier = event.data.get("carrier")
         logger.info(
             "Order shipped",
             merchant_order_id=merchant_order_id,
             tracking_number=tracking_number,
+            carrier=carrier,
         )
-        # In production: update order state
+
+        # Update order status
+        order_service = get_order_service()
+        result = await order_service.get_order_by_merchant_order_id(
+            event.merchant_id, merchant_order_id
+        )
+        if result.order:
+            await order_service.ship_order(
+                order_id=result.order.id,
+                tracking_number=tracking_number,
+                carrier=carrier,
+                actor="merchant_webhook",
+            )
 
     async def _handle_order_delivered(self, event: WebhookEvent) -> None:
         """Handle order delivered event."""
+        from app.application.order_service import get_order_service
+
         merchant_order_id = event.data.get("merchant_order_id")
         logger.info(
             "Order delivered",
             merchant_order_id=merchant_order_id,
         )
-        # In production: update order state
+
+        # Update order status
+        order_service = get_order_service()
+        result = await order_service.get_order_by_merchant_order_id(
+            event.merchant_id, merchant_order_id
+        )
+        if result.order:
+            await order_service.deliver_order(
+                order_id=result.order.id,
+                actor="merchant_webhook",
+            )
+
+    async def _handle_order_cancelled(self, event: WebhookEvent) -> None:
+        """Handle order cancelled event."""
+        from app.application.order_service import get_order_service
+
+        merchant_order_id = event.data.get("merchant_order_id")
+        reason = event.data.get("reason", "Cancelled by merchant")
+        logger.info(
+            "Order cancelled by merchant",
+            merchant_order_id=merchant_order_id,
+            reason=reason,
+        )
+
+        # Update order status
+        order_service = get_order_service()
+        result = await order_service.get_order_by_merchant_order_id(
+            event.merchant_id, merchant_order_id
+        )
+        if result.order:
+            await order_service.cancel_order(
+                order_id=result.order.id,
+                reason=reason,
+                cancelled_by="merchant",
+            )
+
+    async def _handle_order_refunded(self, event: WebhookEvent) -> None:
+        """Handle order refunded event."""
+        from app.application.order_service import get_order_service
+
+        merchant_order_id = event.data.get("merchant_order_id")
+        refund_amount_cents = event.data.get("refund_amount_cents")
+        reason = event.data.get("reason", "Refunded by merchant")
+        logger.info(
+            "Order refunded by merchant",
+            merchant_order_id=merchant_order_id,
+            refund_amount_cents=refund_amount_cents,
+        )
+
+        # Update order status
+        order_service = get_order_service()
+        result = await order_service.get_order_by_merchant_order_id(
+            event.merchant_id, merchant_order_id
+        )
+        if result.order:
+            await order_service.refund_order(
+                order_id=result.order.id,
+                refund_amount_cents=refund_amount_cents,
+                reason=reason,
+                actor="merchant",
+            )
 
     async def _handle_price_changed(self, event: WebhookEvent) -> None:
         """Handle price changed event."""

@@ -525,6 +525,7 @@ async def confirm_checkout(
     return CheckoutConfirmResponse(
         checkout_id=str(checkout.id),
         merchant_order_id=result.merchant_order_id or "",
+        order_id=result.order_id,
         status=CheckoutStatusEnum(checkout.status.value),
         total=PriceSchema(
             amount=checkout.total_cents,

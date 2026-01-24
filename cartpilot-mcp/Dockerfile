@@ -9,8 +9,13 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code
 COPY . .
 
-# Expose port
+# Set environment variables
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+
+# Expose port (for potential HTTP transport in future)
 EXPOSE 8003
 
-# Run the application
+# Run the MCP server using stdio transport
+# Note: For MCP, the server communicates via stdin/stdout
 CMD ["python", "-m", "app.main"]

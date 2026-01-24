@@ -139,6 +139,7 @@ class ConfirmCheckoutResult:
 
     checkout: Checkout | None = None
     merchant_order_id: str | None = None
+    order_id: str | None = None
     success: bool = True
     error: str | None = None
     error_code: str | None = None
@@ -576,9 +577,13 @@ class CheckoutService:
                 request_id=self.request_id,
             )
 
+            # Create order from confirmed checkout
+            order_id = await self._create_order_from_checkout(checkout)
+
             return ConfirmCheckoutResult(
                 checkout=checkout,
                 merchant_order_id=confirm_response.merchant_order_id,
+                order_id=order_id,
             )
 
         except MerchantClientError as e:
@@ -637,6 +642,94 @@ class CheckoutService:
             Checkout if found, None otherwise.
         """
         return self.checkout_repo.get(checkout_id)
+
+    async def _create_order_from_checkout(self, checkout: Checkout) -> str | None:
+        """Create an order from a confirmed checkout.
+
+        Args:
+            checkout: The confirmed checkout.
+
+        Returns:
+            Order ID if created, None if failed.
+        """
+        from app.application.order_service import (
+            AddressDTO,
+            CustomerDTO,
+            OrderItemDTO,
+            get_order_service,
+        )
+
+        try:
+            # Build order items from checkout items
+            order_items = [
+                OrderItemDTO(
+                    product_id=item.product_id,
+                    title=item.title,
+                    quantity=item.quantity,
+                    unit_price_cents=item.unit_price_cents,
+                    currency=item.currency,
+                    variant_id=item.variant_id,
+                    sku=item.sku,
+                )
+                for item in checkout.items
+            ]
+
+            # Default customer info (in production, would come from checkout flow)
+            customer = CustomerDTO(
+                email="customer@example.com",
+                name="Test Customer",
+            )
+
+            # Default shipping address (in production, would come from checkout flow)
+            shipping_address = AddressDTO(
+                line1="123 Test Street",
+                city="Test City",
+                postal_code="12345",
+                country="US",
+                state="CA",
+            )
+
+            order_service = get_order_service(request_id=self.request_id)
+            result = await order_service.create_order_from_checkout(
+                checkout_id=str(checkout.id),
+                merchant_id=str(checkout.merchant_id),
+                merchant_order_id=checkout.merchant_order_id or "",
+                customer=customer,
+                shipping_address=shipping_address,
+                billing_address=shipping_address,
+                items=order_items,
+                subtotal_cents=checkout.subtotal_cents,
+                tax_cents=checkout.tax_cents,
+                shipping_cents=checkout.shipping_cents,
+                total_cents=checkout.total_cents,
+                currency=checkout.currency,
+            )
+
+            if result.success and result.order:
+                logger.info(
+                    "Order created from checkout",
+                    checkout_id=str(checkout.id),
+                    order_id=result.order.id,
+                    request_id=self.request_id,
+                )
+                return result.order.id
+
+            logger.warning(
+                "Failed to create order from checkout",
+                checkout_id=str(checkout.id),
+                error=result.error,
+                request_id=self.request_id,
+            )
+            return None
+
+        except Exception as e:
+            logger.error(
+                "Exception creating order from checkout",
+                checkout_id=str(checkout.id),
+                error=str(e),
+                request_id=self.request_id,
+            )
+            return None
 
 
 # ============================================================================

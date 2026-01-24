@@ -362,6 +362,7 @@ class CheckoutConfirmResponse(BaseModel):
 
     checkout_id: str = Field(..., description="Checkout ID")
     merchant_order_id: str = Field(..., description="Merchant's order ID")
+    order_id: str | None = Field(default=None, description="CartPilot order ID")
     status: CheckoutStatusEnum = Field(..., description="Final status")
     total: PriceSchema = Field(..., description="Total charged")
     confirmed_at: datetime = Field(..., description="Confirmation timestamp")
@@ -382,3 +383,166 @@ class CheckoutsListResponse(PaginatedResponse):
     """Paginated list of checkouts."""
 
     items: list[CheckoutResponse] = Field(..., description="List of checkouts")
+
+
+# ============================================================================
+# Order Schemas
+# ============================================================================
+
+
+class OrderStatusEnum(str, Enum):
+    """Order lifecycle status."""
+
+    PENDING = "pending"
+    CONFIRMED = "confirmed"
+    SHIPPED = "shipped"
+    DELIVERED = "delivered"
+    RETURNED = "returned"
+    CANCELLED = "cancelled"
+    REFUNDED = "refunded"
+
+
+class OrderAddressSchema(BaseModel):
+    """Shipping or billing address."""
+
+    line1: str = Field(..., description="Address line 1")
+    line2: str | None = Field(default=None, description="Address line 2")
+    city: str = Field(..., description="City")
+    state: str | None = Field(default=None, description="State/Province")
+    postal_code: str = Field(..., description="Postal/ZIP code")
+    country: str = Field(..., description="Country code (ISO 3166-1 alpha-2)")
+
+
+class OrderCustomerSchema(BaseModel):
+    """Customer information for an order."""
+
+    email: str = Field(..., description="Customer email")
+    name: str | None = Field(default=None, description="Customer full name")
+    phone: str | None = Field(default=None, description="Customer phone number")
+
+
+class OrderItemSchema(BaseModel):
+    """Item in an order."""
+
+    product_id: str = Field(..., description="Product ID")
+    variant_id: str | None = Field(default=None, description="Variant ID")
+    sku: str | None = Field(default=None, description="Product SKU")
+    title: str = Field(..., description="Product title")
+    quantity: int = Field(..., ge=1, description="Quantity ordered")
+    unit_price: PriceSchema = Field(..., description="Unit price at time of order")
+    line_total: PriceSchema = Field(..., description="Line total")
+
+
+class OrderStatusHistorySchema(BaseModel):
+    """Status history entry for audit trail."""
+
+    from_status: str | None = Field(default=None, description="Previous status")
+    to_status: str = Field(..., description="New status")
+    reason: str | None = Field(default=None, description="Reason for transition")
+    actor: str | None = Field(default=None, description="Who initiated transition")
+    metadata: dict[str, Any] | None = Field(default=None, description="Additional data")
+    created_at: str = Field(..., description="When transition occurred")
+
+
+class OrderResponse(BaseModel):
+    """Order details response."""
+
+    id: str = Field(..., description="Order ID")
+    checkout_id: str = Field(..., description="Source checkout ID")
+    merchant_id: str = Field(..., description="Merchant ID")
+    merchant_order_id: str | None = Field(
+        default=None, description="Merchant's order reference"
+    )
+    status: OrderStatusEnum = Field(..., description="Current order status")
+    customer: OrderCustomerSchema = Field(..., description="Customer information")
+    shipping_address: OrderAddressSchema = Field(..., description="Shipping address")
+    billing_address: OrderAddressSchema | None = Field(
+        default=None, description="Billing address (if different)"
+    )
+    items: list[OrderItemSchema] = Field(..., description="Order items")
+    subtotal: PriceSchema = Field(..., description="Subtotal")
+    tax: PriceSchema = Field(..., description="Tax")
+    shipping: PriceSchema = Field(..., description="Shipping cost")
+    total: PriceSchema = Field(..., description="Order total")
+    tracking_number: str | None = Field(
+        default=None, description="Shipment tracking number"
+    )
+    carrier: str | None = Field(default=None, description="Shipping carrier")
+    cancelled_reason: str | None = Field(
+        default=None, description="Cancellation reason if cancelled"
+    )
+    cancelled_by: str | None = Field(
+        default=None, description="Who cancelled (customer/merchant/system)"
+    )
+    refund_amount: PriceSchema | None = Field(
+        default=None, description="Refund amount if refunded"
+    )
+    refund_reason: str | None = Field(default=None, description="Refund reason")
+    status_history: list[OrderStatusHistorySchema] = Field(
+        default_factory=list, description="Order status history"
+    )
+    created_at: datetime = Field(..., description="When order was created")
+    updated_at: datetime = Field(..., description="When order was last updated")
+    confirmed_at: datetime | None = Field(
+        default=None, description="When order was confirmed"
+    )
+    shipped_at: datetime | None = Field(default=None, description="When order shipped")
+    delivered_at: datetime | None = Field(
+        default=None, description="When order was delivered"
+    )
+    cancelled_at: datetime | None = Field(
+        default=None, description="When order was cancelled"
+    )
+    refunded_at: datetime | None = Field(
+        default=None, description="When order was refunded"
+    )
+
+
+class OrderSummarySchema(BaseModel):
+    """Order summary for listings."""
+
+    id: str = Field(..., description="Order ID")
+    merchant_id: str = Field(..., description="Merchant ID")
+    merchant_order_id: str | None = Field(
+        default=None, description="Merchant's order reference"
+    )
+    status: OrderStatusEnum = Field(..., description="Current status")
+    total: PriceSchema = Field(..., description="Order total")
+    item_count: int = Field(..., description="Number of items")
+    customer_email: str = Field(..., description="Customer email")
+    created_at: datetime = Field(..., description="When created")
+
+
+class OrdersListResponse(PaginatedResponse):
+    """Paginated list of orders."""
+
+    items: list[OrderSummarySchema] = Field(..., description="List of orders")
+
+
+class OrderCancelRequest(BaseModel):
+    """Request to cancel an order."""
+
+    reason: str = Field(..., description="Cancellation reason")
+    cancelled_by: str = Field(
+        default="customer", description="Who is cancelling (customer/merchant/system)"
+    )
+
+
+class OrderRefundRequest(BaseModel):
+    """Request to refund an order."""
+
+    refund_amount_cents: int | None = Field(
+        default=None, description="Refund amount in cents (None for full refund)"
+    )
+    reason: str = Field(default="", description="Refund reason")
+
+
+class SimulateTimeRequest(BaseModel):
+    """Request to simulate time advancement for order."""
+
+    steps: int = Field(
+        default=1,
+        ge=1,
+        le=3,
+        description="Number of status steps to advance (1-3)",
+    )

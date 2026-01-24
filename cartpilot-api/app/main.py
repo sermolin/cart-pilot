@@ -19,6 +19,7 @@ from app.api.intents import router as intents_router
 from app.api.merchants import router as merchants_router
 from app.api.middleware import setup_middleware
 from app.api.offers import router as offers_router
+from app.api.orders import router as orders_router
 from app.api.webhooks import router as webhooks_router
 from app.infrastructure.config import settings
 from app.infrastructure.merchant_client import get_merchant_registry
@@ -86,6 +87,7 @@ app.include_router(health_router, tags=["Health"])
 app.include_router(intents_router)
 app.include_router(offers_router)
 app.include_router(checkouts_router)
+app.include_router(orders_router)
 app.include_router(merchants_router)
 app.include_router(webhooks_router)
 
