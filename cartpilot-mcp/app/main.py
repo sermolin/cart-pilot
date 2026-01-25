@@ -3,6 +3,10 @@
 Exposes CartPilot capabilities as MCP tools for AI agent interaction.
 This is a thin adapter over the CartPilot REST API.
 
+Supports two transport modes:
+- stdio: For local use with AI agents (Claude Desktop, Cursor)
+- sse: For Docker/HTTP use via Server-Sent Events
+
 MCP Tools:
 1. create_intent - Create purchase intent from text
 2. list_offers - Get offers for an intent
@@ -18,7 +22,7 @@ import asyncio
 import json
 import logging
 import sys
-from typing import Any
+from typing import Any, Literal
 
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
@@ -54,6 +58,18 @@ class Settings(BaseSettings):
     log_level: str = Field(
         default="INFO",
         description="Logging level",
+    )
+    transport: Literal["stdio", "sse"] = Field(
+        default="stdio",
+        description="MCP transport mode: 'stdio' for local, 'sse' for HTTP/Docker",
+    )
+    sse_host: str = Field(
+        default="0.0.0.0",
+        description="Host to bind SSE server to",
+    )
+    sse_port: int = Field(
+        default=8003,
+        description="Port for SSE server",
     )
 
     model_config = {
@@ -413,10 +429,10 @@ def create_mcp_server() -> Server:
     return server
 
 
-async def run_server() -> None:
+async def run_stdio_server() -> None:
     """Run the MCP server using stdio transport."""
     logger.info(
-        "Starting CartPilot MCP Server",
+        "Starting CartPilot MCP Server (stdio)",
         cartpilot_api_url=settings.cartpilot_api_url,
         merchant_b_url=settings.merchant_b_url,
     )
@@ -431,13 +447,72 @@ async def run_server() -> None:
         )
 
 
+def run_sse_server() -> None:
+    """Run the MCP server using SSE transport over HTTP."""
+    from mcp.server.sse import SseServerTransport
+    from starlette.applications import Starlette
+    from starlette.routing import Route
+    from starlette.responses import JSONResponse
+    import uvicorn
+
+    logger.info(
+        "Starting CartPilot MCP Server (SSE)",
+        cartpilot_api_url=settings.cartpilot_api_url,
+        merchant_b_url=settings.merchant_b_url,
+        host=settings.sse_host,
+        port=settings.sse_port,
+    )
+
+    server = create_mcp_server()
+    sse = SseServerTransport("/messages")
+
+    async def handle_sse(request):
+        """Handle SSE connection."""
+        async with sse.connect_sse(
+            request.scope, request.receive, request._send
+        ) as streams:
+            await server.run(
+                streams[0],
+                streams[1],
+                server.create_initialization_options(),
+            )
+
+    async def handle_messages(request):
+        """Handle POST messages from client."""
+        await sse.handle_post_message(request.scope, request.receive, request._send)
+
+    async def health(request):
+        """Health check endpoint."""
+        return JSONResponse({
+            "status": "healthy",
+            "service": "cartpilot-mcp",
+            "transport": "sse",
+        })
+
+    app = Starlette(
+        debug=True,
+        routes=[
+            Route("/health", health, methods=["GET"]),
+            Route("/sse", handle_sse, methods=["GET"]),
+            Route("/messages", handle_messages, methods=["POST"]),
+        ],
+    )
+
+    uvicorn.run(app, host=settings.sse_host, port=settings.sse_port)
+
+
 def main() -> None:
     """Run the MCP server.
 
-    Entry point for the MCP server. Uses stdio transport for
-    communication with AI agents.
+    Entry point for the MCP server. Transport mode is selected
+    via MCP_TRANSPORT environment variable:
+    - 'stdio': For local use with AI agents (default)
+    - 'sse': For Docker/HTTP use
     """
-    asyncio.run(run_server())
+    if settings.transport == "sse":
+        run_sse_server()
+    else:
+        asyncio.run(run_stdio_server())
 
 
 if __name__ == "__main__":

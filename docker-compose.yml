@@ -22,7 +22,60 @@ services:
       - cartpilot-network
 
   # =============================================================================
+  # Merchant Simulator A (Happy Path)
+  # - Started first, no dependencies
+  # =============================================================================
+  merchant-a:
+    build:
+      context: ./merchant-a
+      dockerfile: Dockerfile
+    container_name: merchant-a
+    environment:
+      MERCHANT_ID: ${MERCHANT_A_ID:-merchant-a}
+      WEBHOOK_URL: ${CARTPILOT_WEBHOOK_URL:-http://cartpilot-api:8000/webhooks/merchant}
+      WEBHOOK_SECRET: ${WEBHOOK_SECRET:-dev-webhook-secret-change-in-production}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    ports:
+      - "8001:8001"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8001/health', timeout=5).raise_for_status()"]
+      interval: 10s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+    networks:
+      - cartpilot-network
+
+  # =============================================================================
+  # Merchant Simulator B (Chaos Mode)
+  # - Started first, no dependencies
+  # =============================================================================
+  merchant-b:
+    build:
+      context: ./merchant-b
+      dockerfile: Dockerfile
+    container_name: merchant-b
+    environment:
+      MERCHANT_ID: ${MERCHANT_B_ID:-merchant-b}
+      WEBHOOK_URL: ${CARTPILOT_WEBHOOK_URL:-http://cartpilot-api:8000/webhooks/merchant}
+      WEBHOOK_SECRET: ${WEBHOOK_SECRET:-dev-webhook-secret-change-in-production}
+      CHAOS_ENABLED: ${CHAOS_ENABLED:-false}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    ports:
+      - "8002:8002"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8002/health', timeout=5).raise_for_status()"]
+      interval: 10s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+    networks:
+      - cartpilot-network
+
+  # =============================================================================
   # CartPilot Core API
+  # - Depends on database and merchant simulators
+  # - Runs database migrations on startup
   # =============================================================================
   cartpilot-api:
     build:
@@ -41,53 +94,29 @@ services:
       MERCHANT_B_ENABLED: ${MERCHANT_B_ENABLED:-true}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       DEBUG: ${DEBUG:-true}
+      SEED_CATALOG: ${SEED_CATALOG:-false}
     ports:
       - "8000:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8000/health', timeout=5).raise_for_status()"]
+      interval: 10s
+      timeout: 5s
+      start_period: 30s
+      retries: 5
     depends_on:
       db:
+        condition: service_healthy
+      merchant-a:
+        condition: service_healthy
+      merchant-b:
         condition: service_healthy
     networks:
       - cartpilot-network
 
   # =============================================================================
-  # Merchant Simulator A (Happy Path)
-  # =============================================================================
-  merchant-a:
-    build:
-      context: ./merchant-a
-      dockerfile: Dockerfile
-    container_name: merchant-a
-    environment:
-      MERCHANT_ID: ${MERCHANT_A_ID:-merchant-a}
-      WEBHOOK_URL: ${CARTPILOT_WEBHOOK_URL:-http://cartpilot-api:8000/webhooks/merchant}
-      WEBHOOK_SECRET: ${WEBHOOK_SECRET:-dev-webhook-secret-change-in-production}
-      LOG_LEVEL: ${LOG_LEVEL:-INFO}
-    ports:
-      - "8001:8001"
-    networks:
-      - cartpilot-network
-
-  # =============================================================================
-  # Merchant Simulator B (Chaos Mode)
-  # =============================================================================
-  merchant-b:
-    build:
-      context: ./merchant-b
-      dockerfile: Dockerfile
-    container_name: merchant-b
-    environment:
-      MERCHANT_ID: ${MERCHANT_B_ID:-merchant-b}
-      WEBHOOK_URL: ${CARTPILOT_WEBHOOK_URL:-http://cartpilot-api:8000/webhooks/merchant}
-      WEBHOOK_SECRET: ${WEBHOOK_SECRET:-dev-webhook-secret-change-in-production}
-      CHAOS_ENABLED: ${CHAOS_ENABLED:-false}
-      LOG_LEVEL: ${LOG_LEVEL:-INFO}
-    ports:
-      - "8002:8002"
-    networks:
-      - cartpilot-network
-
-  # =============================================================================
-  # MCP Server
+  # MCP Server (SSE Transport for Docker)
+  # Provides MCP tools over HTTP/SSE for AI agent interaction
+  # For local stdio transport, run: cd cartpilot-mcp && python -m app.main
   # =============================================================================
   cartpilot-mcp:
     build:
@@ -97,11 +126,22 @@ services:
     environment:
       CARTPILOT_API_URL: http://cartpilot-api:8000
       CARTPILOT_API_KEY: ${CARTPILOT_API_KEY:-dev-api-key-change-in-production}
+      MERCHANT_B_URL: http://merchant-b:8002
+      TRANSPORT: sse
+      SSE_HOST: "0.0.0.0"
+      SSE_PORT: "8003"
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     ports:
       - "8003:8003"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8003/health', timeout=5).raise_for_status()"]
+      interval: 10s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
     depends_on:
-      - cartpilot-api
+      cartpilot-api:
+        condition: service_healthy
     networks:
       - cartpilot-network
 

@@ -1,0 +1,748 @@
+{
+  "info": {
+    "_postman_id": "cartpilot-api-collection",
+    "name": "CartPilot API",
+    "description": "Complete API collection for CartPilot - Agent-first commerce orchestration backend.\n\n## Getting Started\n\n1. Start the services: `docker compose up`\n2. Import this collection into Postman\n3. Set the environment variables (or use defaults)\n4. Run requests in order for the complete flow\n\n## Variables\n\n- `base_url`: http://localhost:8000\n- `api_key`: dev-api-key-change-in-production\n- `merchant_a_url`: http://localhost:8001\n- `merchant_b_url`: http://localhost:8002",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8000",
+      "type": "string"
+    },
+    {
+      "key": "api_key",
+      "value": "dev-api-key-change-in-production",
+      "type": "string"
+    },
+    {
+      "key": "merchant_a_url",
+      "value": "http://localhost:8001",
+      "type": "string"
+    },
+    {
+      "key": "merchant_b_url",
+      "value": "http://localhost:8002",
+      "type": "string"
+    },
+    {
+      "key": "mcp_url",
+      "value": "http://localhost:8003",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health Checks",
+      "item": [
+        {
+          "name": "CartPilot API Health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/health",
+              "host": ["{{base_url}}"],
+              "path": ["health"]
+            }
+          }
+        },
+        {
+          "name": "Merchant A Health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{merchant_a_url}}/health",
+              "host": ["{{merchant_a_url}}"],
+              "path": ["health"]
+            }
+          }
+        },
+        {
+          "name": "Merchant B Health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{merchant_b_url}}/health",
+              "host": ["{{merchant_b_url}}"],
+              "path": ["health"]
+            }
+          }
+        },
+        {
+          "name": "MCP Server Health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{mcp_url}}/health",
+              "host": ["{{mcp_url}}"],
+              "path": ["health"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Purchase Flow",
+      "description": "Complete purchase flow from intent to order. Run these requests in order.",
+      "item": [
+        {
+          "name": "1. Create Intent",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "pm.collectionVariables.set('intent_id', jsonData.id);",
+                  "pm.test('Intent created', function() {",
+                  "    pm.response.to.have.status(201);",
+                  "    pm.expect(jsonData.id).to.be.a('string');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{api_key}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"wireless headphones under $100\",\n  \"session_id\": \"postman-demo-session\",\n  \"metadata\": {\n    \"category\": \"electronics\",\n    \"source\": \"postman\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/intents",
+              "host": ["{{base_url}}"],
+              "path": ["intents"]
+            }
+          }
+        },
+        {
+          "name": "2. Get Offers for Intent",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.items && jsonData.items.length > 0) {",
+                  "    pm.collectionVariables.set('offer_id', jsonData.items[0].id);",
+                  "    if (jsonData.items[0].items && jsonData.items[0].items.length > 0) {",
+                  "        pm.collectionVariables.set('product_id', jsonData.items[0].items[0].product_id);",
+                  "    }",
+                  "}",
+                  "pm.test('Offers retrieved', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{api_key}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/intents/{{intent_id}}/offers",
+              "host": ["{{base_url}}"],
+              "path": ["intents", "{{intent_id}}", "offers"]
+            }
+          }
+        },
+        {
+          "name": "3. Get Offer Details",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{api_key}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/offers/{{offer_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["offers", "{{offer_id}}"]
+            }
+          }
+        },
+        {
+          "name": "4. Create Checkout",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "pm.collectionVariables.set('checkout_id', jsonData.id);",
+                  "pm.test('Checkout created', function() {",
+                  "    pm.response.to.have.status(201);",
+                  "    pm.expect(jsonData.status).to.equal('created');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{api_key}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"offer_id\": \"{{offer_id}}\",\n  \"items\": [\n    {\n      \"product_id\": \"{{product_id}}\",\n      \"quantity\": 1\n    }\n  ],\n  \"idempotency_key\": \"postman-checkout-{{$timestamp}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/checkouts",
+              "host": ["{{base_url}}"],
+              "path": ["checkouts"]
+            }
+          }
+        },
+        {
+          "name": "5. Get Quote",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "pm.test('Quote received', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(jsonData.status).to.equal('quoted');",
+                  "    pm.expect(jsonData.total).to.be.an('object');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{api_key}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"items\": [\n    {\n      \"product_id\": \"{{product_id}}\",\n      \"quantity\": 1\n    }\n  ],\n  \"customer_email\": \"demo@example.com\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/checkouts/{{checkout_id}}/quote",
+              "host": ["{{base_url}}"],
+              "path": ["checkouts", "{{checkout_id}}", "quote"]
+            }
+          }
+        },
+        {
+          "name": "6. Request Approval",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "pm.test('Approval requested', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(jsonData.status).to.equal('awaiting_approval');",
+                  "    pm.expect(jsonData.frozen_receipt).to.be.an('object');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{api_key}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/checkouts/{{checkout_id}}/request-approval",
+              "host": ["{{base_url}}"],
+              "path": ["checkouts", "{{checkout_id}}", "request-approval"]
+            }
+          }
+        },
+        {
+          "name": "7. Approve Checkout",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "pm.test('Checkout approved', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(jsonData.status).to.equal('approved');",
+                  "    pm.expect(jsonData.approved_by).to.equal('postman-user');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{api_key}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"approved_by\": \"postman-user\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/checkouts/{{checkout_id}}/approve",
+              "host": ["{{base_url}}"],
+              "path": ["checkouts", "{{checkout_id}}", "approve"]
+            }
+          }
+        },
+        {
+          "name": "8. Confirm Purchase",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "pm.collectionVariables.set('order_id', jsonData.order_id);",
+                  "pm.collectionVariables.set('merchant_order_id', jsonData.merchant_order_id);",
+                  "pm.test('Purchase confirmed', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(jsonData.status).to.equal('confirmed');",
+                  "    pm.expect(jsonData.order_id).to.be.a('string');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{api_key}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"payment_method\": \"test_card\",\n  \"idempotency_key\": \"postman-confirm-{{$timestamp}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/checkouts/{{checkout_id}}/confirm",
+              "host": ["{{base_url}}"],
+              "path": ["checkouts", "{{checkout_id}}", "confirm"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Orders",
+      "item": [
+        {
+          "name": "List Orders",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{api_key}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/orders?page=1&page_size=20",
+              "host": ["{{base_url}}"],
+              "path": ["orders"],
+              "query": [
+                {"key": "page", "value": "1"},
+                {"key": "page_size", "value": "20"}
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Order Details",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{api_key}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/orders/{{order_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["orders", "{{order_id}}"]
+            }
+          }
+        },
+        {
+          "name": "Simulate Order Advance",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{api_key}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"steps\": 1\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/orders/{{order_id}}/simulate-advance",
+              "host": ["{{base_url}}"],
+              "path": ["orders", "{{order_id}}", "simulate-advance"]
+            }
+          }
+        },
+        {
+          "name": "Cancel Order",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{api_key}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Customer requested cancellation\",\n  \"cancelled_by\": \"customer\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/orders/{{order_id}}/cancel",
+              "host": ["{{base_url}}"],
+              "path": ["orders", "{{order_id}}", "cancel"]
+            }
+          }
+        },
+        {
+          "name": "Refund Order",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{api_key}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Full refund requested\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/orders/{{order_id}}/refund",
+              "host": ["{{base_url}}"],
+              "path": ["orders", "{{order_id}}", "refund"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Chaos Mode (Merchant B)",
+      "description": "Configure chaos scenarios for testing edge cases.",
+      "item": [
+        {
+          "name": "Get Chaos Config",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{merchant_b_url}}/chaos/config",
+              "host": ["{{merchant_b_url}}"],
+              "path": ["chaos", "config"]
+            }
+          }
+        },
+        {
+          "name": "Enable Price Change Chaos",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"scenarios\": {\n    \"price_change\": true\n  },\n  \"price_change_percent\": 20\n}"
+            },
+            "url": {
+              "raw": "{{merchant_b_url}}/chaos/configure",
+              "host": ["{{merchant_b_url}}"],
+              "path": ["chaos", "configure"]
+            }
+          }
+        },
+        {
+          "name": "Enable Out of Stock Chaos",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"scenarios\": {\n    \"out_of_stock\": true\n  },\n  \"out_of_stock_probability\": 0.5\n}"
+            },
+            "url": {
+              "raw": "{{merchant_b_url}}/chaos/configure",
+              "host": ["{{merchant_b_url}}"],
+              "path": ["chaos", "configure"]
+            }
+          }
+        },
+        {
+          "name": "Enable Duplicate Webhook Chaos",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"scenarios\": {\n    \"duplicate_webhook\": true\n  },\n  \"duplicate_webhook_count\": 3\n}"
+            },
+            "url": {
+              "raw": "{{merchant_b_url}}/chaos/configure",
+              "host": ["{{merchant_b_url}}"],
+              "path": ["chaos", "configure"]
+            }
+          }
+        },
+        {
+          "name": "Enable All Chaos",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{merchant_b_url}}/chaos/enable-all",
+              "host": ["{{merchant_b_url}}"],
+              "path": ["chaos", "enable-all"]
+            }
+          }
+        },
+        {
+          "name": "Disable All Chaos",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{merchant_b_url}}/chaos/disable-all",
+              "host": ["{{merchant_b_url}}"],
+              "path": ["chaos", "disable-all"]
+            }
+          }
+        },
+        {
+          "name": "Reset Chaos Controller",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{merchant_b_url}}/chaos/reset",
+              "host": ["{{merchant_b_url}}"],
+              "path": ["chaos", "reset"]
+            }
+          }
+        },
+        {
+          "name": "Get Chaos Events",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{merchant_b_url}}/chaos/events?limit=50",
+              "host": ["{{merchant_b_url}}"],
+              "path": ["chaos", "events"],
+              "query": [
+                {"key": "limit", "value": "50"}
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Webhooks",
+      "item": [
+        {
+          "name": "Send Test Webhook",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Merchant-Id",
+                "value": "merchant-a"
+              },
+              {
+                "key": "X-Event-Id",
+                "value": "test-event-001"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"event_id\": \"test-event-{{$timestamp}}\",\n  \"event_type\": \"checkout.confirmed\",\n  \"merchant_id\": \"merchant-a\",\n  \"timestamp\": \"{{$isoTimestamp}}\",\n  \"data\": {\n    \"checkout_id\": \"test-checkout-id\",\n    \"order_id\": \"test-order-id\"\n  },\n  \"ucp_version\": \"1.0.0\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/webhooks/merchant",
+              "host": ["{{base_url}}"],
+              "path": ["webhooks", "merchant"]
+            }
+          }
+        },
+        {
+          "name": "Get Event Status",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{api_key}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/webhooks/events/test-event-001?merchant_id=merchant-a",
+              "host": ["{{base_url}}"],
+              "path": ["webhooks", "events", "test-event-001"],
+              "query": [
+                {"key": "merchant_id", "value": "merchant-a"}
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Merchants",
+      "item": [
+        {
+          "name": "List Merchants",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{api_key}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/merchants",
+              "host": ["{{base_url}}"],
+              "path": ["merchants"]
+            }
+          }
+        },
+        {
+          "name": "Merchant A - List Products",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{merchant_a_url}}/products?page=1&page_size=10",
+              "host": ["{{merchant_a_url}}"],
+              "path": ["products"],
+              "query": [
+                {"key": "page", "value": "1"},
+                {"key": "page_size", "value": "10"}
+              ]
+            }
+          }
+        },
+        {
+          "name": "Merchant B - List Products",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{merchant_b_url}}/products?page=1&page_size=10",
+              "host": ["{{merchant_b_url}}"],
+              "path": ["products"],
+              "query": [
+                {"key": "page", "value": "1"},
+                {"key": "page_size", "value": "10"}
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

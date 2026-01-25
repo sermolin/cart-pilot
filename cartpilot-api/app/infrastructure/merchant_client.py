@@ -485,22 +485,72 @@ class MerchantClient:
     ) -> list[MerchantProduct]:
         """Search products by query.
 
-        Convenience method that wraps list_products with search.
+        Extracts keywords from natural language query and searches
+        for products matching any keyword.
 
         Args:
-            query: Search query.
+            query: Natural language search query.
             limit: Maximum results.
 
         Returns:
             List of matching products.
         """
-        result = await self.list_products(
-            page=1,
-            page_size=limit,
-            search=query,
-            in_stock=True,  # Only return in-stock items
+        # Extract meaningful keywords from query
+        # Remove common stop words and short words
+        stop_words = {
+            "i", "want", "to", "buy", "a", "an", "the", "for", "and", "or",
+            "with", "in", "on", "at", "of", "some", "any", "need", "looking",
+            "find", "get", "me", "my", "please", "can", "you", "under", "over",
+            "around", "about", "less", "than", "more", "up", "best", "good",
+            "cheap", "expensive", "new", "like", "would", "something", "that",
+            "is", "are", "was", "be", "have", "has", "do", "does", "will",
+        }
+        
+        # Tokenize and filter
+        words = query.lower().split()
+        keywords = [
+            word.strip(".,!?\"'()[]{}") 
+            for word in words 
+            if word.lower() not in stop_words and len(word) > 2
+        ]
+        
+        logger.debug(
+            "Extracted search keywords",
+            original_query=query,
+            keywords=keywords,
+            merchant_id=self.merchant.id,
         )
-        return result.items
+        
+        # If no keywords extracted, return some products without search filter
+        if not keywords:
+            result = await self.list_products(
+                page=1,
+                page_size=limit,
+                in_stock=True,
+            )
+            return result.items
+        
+        # Search with each keyword and collect unique results
+        seen_ids: set[str] = set()
+        all_products: list[MerchantProduct] = []
+        
+        for keyword in keywords[:3]:  # Limit to first 3 keywords
+            result = await self.list_products(
+                page=1,
+                page_size=limit,
+                search=keyword,
+                in_stock=True,
+            )
+            for product in result.items:
+                if product.id not in seen_ids:
+                    seen_ids.add(product.id)
+                    all_products.append(product)
+                    if len(all_products) >= limit:
+                        break
+            if len(all_products) >= limit:
+                break
+        
+        return all_products[:limit]
 
     async def create_quote(
         self,
