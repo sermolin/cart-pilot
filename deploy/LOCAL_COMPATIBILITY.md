@@ -1,136 +1,136 @@
-# Локальная совместимость после оптимизации Dockerfile'ов
+# Local Compatibility After Dockerfile Optimization
 
-## ✅ Полная совместимость
+## ✅ Full Compatibility
 
-Все оптимизированные Dockerfile'ы **полностью совместимы** с локальной разработкой через Docker Compose.
+All optimized Dockerfiles are **fully compatible** with local development via Docker Compose.
 
-## Что осталось без изменений
+## What Remained Unchanged
 
-- ✅ Все порты остались теми же (8000, 8001, 8002, 8003)
-- ✅ Все команды запуска идентичны
-- ✅ Entrypoint скрипты работают как прежде
-- ✅ Environment variables не изменились
-- ✅ Health checks совместимы с docker-compose
+- ✅ All ports remain the same (8000, 8001, 8002, 8003)
+- ✅ All startup commands are identical
+- ✅ Entrypoint scripts work as before
+- ✅ Environment variables unchanged
+- ✅ Health checks compatible with docker-compose
 
-## Что изменилось (только внутренне)
+## What Changed (internally only)
 
-- 🔒 Приложения теперь запускаются от non-root пользователя (`appuser`)
-- 📦 Образы стали меньше за счет multi-stage builds
-- ⚡ Улучшено кэширование слоев при сборке
+- 🔒 Applications now run as non-root user (`appuser`)
+- 📦 Images are smaller due to multi-stage builds
+- ⚡ Improved layer caching during builds
 
-## Проверка локально
+## Local Verification
 
-### 1. Пересоберите образы
+### 1. Rebuild Images
 
 ```bash
-# Очистите старые образы (опционально)
+# Clean up old images (optional)
 docker compose down
 
-# Пересоберите с новыми Dockerfile'ами
+# Rebuild with new Dockerfiles
 docker compose build
 
-# Или пересоберите конкретный сервис
+# Or rebuild specific service
 docker compose build cartpilot-api
 ```
 
-### 2. Запустите все сервисы
+### 2. Start All Services
 
 ```bash
 docker compose up
 ```
 
-### 3. Проверьте, что всё работает
+### 3. Verify Everything Works
 
 ```bash
-# Проверьте health endpoints
+# Check health endpoints
 curl http://localhost:8000/health  # CartPilot API
 curl http://localhost:8001/health  # Merchant A
 curl http://localhost:8002/health  # Merchant B
 curl http://localhost:8003/health  # MCP Server
 ```
 
-### 4. Проверьте, что приложения запущены от non-root пользователя
+### 4. Verify Applications Run as Non-Root User
 
 ```bash
-# Проверьте пользователя в контейнере
+# Check user in container
 docker compose exec cartpilot-api whoami
-# Должно вывести: appuser
+# Should output: appuser
 
 docker compose exec merchant-a whoami
-# Должно вывести: appuser
+# Should output: appuser
 ```
 
-## Возможные проблемы и решения
+## Possible Issues and Solutions
 
-### Проблема: "Permission denied" при запуске entrypoint скрипта
+### Issue: "Permission denied" when running entrypoint script
 
-**Решение**: Убедитесь, что вы пересобрали образы после изменений:
+**Solution**: Make sure you rebuilt images after changes:
 
 ```bash
 docker compose build --no-cache cartpilot-api
 docker compose up cartpilot-api
 ```
 
-### Проблема: Миграции БД не выполняются
+### Issue: DB migrations not running
 
-**Решение**: Проверьте, что alemic доступен в PATH. В оптимизированном Dockerfile PATH уже настроен правильно, но если проблема сохраняется:
+**Solution**: Check that alembic is available in PATH. In the optimized Dockerfile, PATH is already configured correctly, but if the issue persists:
 
 ```bash
-# Проверьте внутри контейнера
+# Check inside container
 docker compose exec cartpilot-api which alembic
-# Должно вывести: /home/appuser/.local/bin/alembic
+# Should output: /home/appuser/.local/bin/alembic
 ```
 
-### Проблема: Старые образы используются
+### Issue: Old images being used
 
-**Решение**: Принудительно пересоберите без кэша:
+**Solution**: Force rebuild without cache:
 
 ```bash
 docker compose build --no-cache
 docker compose up
 ```
 
-## Преимущества для локальной разработки
+## Benefits for Local Development
 
-1. **Быстрее сборка**: Лучшее кэширование слоев означает, что при изменении кода пересборка происходит быстрее
-2. **Меньше места**: Образы занимают меньше места на диске
-3. **Безопаснее**: Приложения запускаются от non-root пользователя даже локально
-4. **Консистентность**: Локальная и production среда используют одинаковые образы
+1. **Faster builds**: Better layer caching means faster rebuilds when code changes
+2. **Less disk space**: Images take up less space on disk
+3. **More secure**: Applications run as non-root user even locally
+4. **Consistency**: Local and production environments use identical images
 
-## Тестирование
+## Testing
 
-Все существующие тесты и скрипты должны работать без изменений:
+All existing tests and scripts should work without changes:
 
 ```bash
-# Демо скрипты
+# Demo scripts
 ./scripts/demo_happy_path.sh
 ./scripts/demo_chaos_mode.sh
 ./scripts/demo_order_lifecycle.sh
 
-# E2E тесты
+# E2E tests
 cd cartpilot-api
 pytest tests/e2e/
 ```
 
-## Миграция с старых образов
+## Migrating from Old Images
 
-Если у вас уже были запущены контейнеры со старыми образами:
+If you already had containers running with old images:
 
 ```bash
-# Остановите и удалите старые контейнеры
+# Stop and remove old containers
 docker compose down
 
-# Удалите старые образы (опционально)
+# Remove old images (optional)
 docker compose rm -f
 docker image prune -f
 
-# Пересоберите и запустите заново
+# Rebuild and restart
 docker compose build
 docker compose up
 ```
 
-## Заключение
+## Conclusion
 
-✅ **Всё продолжит работать локально без изменений в использовании**
+✅ **Everything continues to work locally without usage changes**
 
-Единственное, что нужно сделать - пересобрать образы один раз после обновления Dockerfile'ов. После этого всё работает как прежде, но с улучшенной производительностью и безопасностью.
+The only thing needed is to rebuild images once after Dockerfile updates. After that, everything works as before, but with improved performance and security.

@@ -1,109 +1,109 @@
 # Dockerfile Optimization for Production
 
-Все Dockerfile'ы были оптимизированы для production с использованием multi-stage builds.
+All Dockerfiles have been optimized for production using multi-stage builds.
 
-## Основные улучшения
+## Key Improvements
 
 ### 1. Multi-Stage Builds
 
-Каждый Dockerfile теперь использует два этапа:
+Each Dockerfile now uses two stages:
 
-- **Builder stage**: Установка зависимостей и компиляция (если требуется)
-- **Runtime stage**: Минимальный production образ только с необходимыми файлами
+- **Builder stage**: Dependency installation and compilation (if needed)
+- **Runtime stage**: Minimal production image with only necessary files
 
-### 2. Оптимизация размера образа
+### 2. Image Size Optimization
 
-- Разделение build-зависимостей (gcc, g++) и runtime зависимостей
-- Удаление build-зависимостей из финального образа
-- Использование `--no-cache-dir` для pip
-- Минимизация количества слоев
+- Separation of build dependencies (gcc, g++) from runtime dependencies
+- Removal of build dependencies from final image
+- Using `--no-cache-dir` for pip
+- Minimizing number of layers
 
-### 3. Безопасность
+### 3. Security
 
-- Использование non-root пользователя (`appuser`) для запуска приложений
-- Правильные права доступа к файлам (`--chown=appuser:appuser`)
-- Минимизация attack surface
+- Using non-root user (`appuser`) to run applications
+- Proper file permissions (`--chown=appuser:appuser`)
+- Minimizing attack surface
 
-### 4. Кэширование слоев
+### 4. Layer Caching
 
-- Копирование `requirements.txt` перед копированием кода приложения
-- Это позволяет Docker кэшировать слой с зависимостями при изменении кода
+- Copying `requirements.txt` before copying application code
+- This allows Docker to cache the dependency layer when code changes
 
-### 5. Production-ready настройки
+### 5. Production-Ready Settings
 
-- Оптимизированные health checks с увеличенными интервалами для production
-- Правильные environment variables
-- Улучшенные таймауты для health checks
+- Optimized health checks with increased intervals for production
+- Proper environment variables
+- Improved health check timeouts
 
-## Оптимизированные Dockerfile'ы
+## Optimized Dockerfiles
 
 ### cartpilot-api/Dockerfile
 
-- Multi-stage build с разделением builder и runtime
-- Сохранение entrypoint скрипта для миграций БД
-- Non-root пользователь для безопасности
+- Multi-stage build with builder and runtime separation
+- Preserved entrypoint script for DB migrations
+- Non-root user for security
 
 ### cartpilot-mcp/Dockerfile
 
 - Multi-stage build
-- Настройка TRANSPORT=sse по умолчанию для Docker
-- Минимальный runtime образ
+- TRANSPORT=sse configured by default for Docker
+- Minimal runtime image
 
 ### merchant-a/Dockerfile
 
 - Multi-stage build
-- Простой runtime образ без лишних зависимостей
-- Оптимизированный health check
+- Simple runtime image without unnecessary dependencies
+- Optimized health check
 
 ### merchant-b/Dockerfile
 
 - Multi-stage build
-- Идентичная структура с merchant-a для консистентности
-- Production-ready конфигурация
+- Identical structure with merchant-a for consistency
+- Production-ready configuration
 
-## Размеры образов (примерные)
+## Image Sizes (approximate)
 
-До оптимизации:
-- ~200-250 MB на сервис (включая build-зависимости)
+Before optimization:
+- ~200-250 MB per service (including build dependencies)
 
-После оптимизации:
-- ~150-180 MB на сервис (только runtime зависимости)
+After optimization:
+- ~150-180 MB per service (runtime dependencies only)
 
-**Экономия: ~20-30% размера образа**
+**Savings: ~20-30% of image size**
 
-## Использование
+## Usage
 
-Сборка образов остается такой же:
+Building images remains the same:
 
 ```bash
-# Локальная сборка
+# Local build
 docker build -t cartpilot-api ./cartpilot-api
 
-# Для GCP Artifact Registry
+# For GCP Artifact Registry
 docker build -t us-central1-docker.pkg.dev/PROJECT_ID/cartpilot-docker/cartpilot-api:latest ./cartpilot-api
 docker push us-central1-docker.pkg.dev/PROJECT_ID/cartpilot-docker/cartpilot-api:latest
 ```
 
-## Проверка образов
+## Verifying Images
 
-После сборки можно проверить размер:
+After building, you can check the size:
 
 ```bash
 docker images | grep cartpilot
 ```
 
-И проверить, что приложение запускается от non-root пользователя:
+And verify that the application runs as non-root user:
 
 ```bash
 docker run --rm cartpilot-api whoami
-# Должно вывести: appuser
+# Should output: appuser
 ```
 
-## Совместимость
+## Compatibility
 
-Оптимизированные Dockerfile'ы полностью совместимы с:
-- Docker Compose (локальная разработка)
+Optimized Dockerfiles are fully compatible with:
+- Docker Compose (local development)
 - Cloud Run (GCP deployment)
-- Kubernetes (если потребуется в будущем)
+- Kubernetes (if needed in the future)
 
-Все существующие команды и конфигурации продолжают работать без изменений.
+All existing commands and configurations continue to work without changes.

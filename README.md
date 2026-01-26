@@ -509,6 +509,218 @@ lsof -i :8000
 CARTPILOT_API_PORT=9000
 ```
 
+## Deployment
+
+### GCP Deployment (Production)
+
+CartPilot can be deployed to Google Cloud Platform using Cloud Run and Cloud SQL.
+
+#### Prerequisites
+
+- Google Cloud SDK (`gcloud` CLI)
+- Docker
+- GCP project with billing enabled
+
+#### Quick Deployment
+
+```bash
+# 1. Set up GCP project and Artifact Registry
+./deploy/gcp/setup.sh
+
+# 2. Deploy Cloud SQL database
+./deploy/gcp/deploy-cloudsql.sh
+
+# 3. Set secrets
+export CARTPILOT_API_KEY="your-secure-api-key"
+export WEBHOOK_SECRET="your-webhook-secret"
+
+# 4. Build and deploy all services
+./deploy/gcp/deploy.sh
+```
+
+#### Deployment Steps
+
+1. **Initial Setup** (`deploy/gcp/setup.sh`)
+   - Creates/uses GCP project
+   - Enables required APIs
+   - Sets up Artifact Registry
+   - Creates service account
+
+2. **Cloud SQL** (`deploy/gcp/deploy-cloudsql.sh`)
+   - Creates PostgreSQL instance
+   - Configures private IP
+   - Creates database and user
+
+3. **Cloud Run** (`deploy/gcp/deploy.sh`)
+   - Builds Docker images
+   - Pushes to Artifact Registry
+   - Deploys services in correct order
+
+For detailed instructions, see [GCP Deployment Guide](deploy/gcp/README.md).
+
+#### Service URLs
+
+After deployment, services will be available at:
+
+- `https://cartpilot-api-xxxx.run.app`
+- `https://cartpilot-mcp-xxxx.run.app`
+- `https://merchant-a-xxxx.run.app`
+- `https://merchant-b-xxxx.run.app`
+
+#### Cost Estimation
+
+For demo/testing:
+- Cloud Run: ~$0-5/month
+- Cloud SQL (db-f1-micro): ~$7-10/month
+- Artifact Registry: ~$0.10/GB/month
+- **Total: ~$10-20/month**
+
+For production:
+- Cloud Run: ~$20-50/month
+- Cloud SQL (db-f1-small): ~$15-20/month
+- **Total: ~$40-75/month**
+
+## LLM Integrations
+
+CartPilot provides multiple integration options for AI assistants:
+
+### 1. MCP Server (Claude, Cline, VS Code)
+
+The MCP server provides tools via Server-Sent Events (SSE) for MCP-compatible agents.
+
+**Setup:**
+
+1. Deploy CartPilot MCP server (included in deployment)
+2. Configure MCP client with SSE endpoint:
+   ```
+   https://cartpilot-mcp-xxxx.run.app/sse
+   ```
+
+**Available Tools:**
+- `create_intent` - Create purchase intent
+- `list_offers` - Get offers from merchants
+- `get_offer_details` - Get detailed offer info
+- `request_approval` - Request approval
+- `approve_purchase` - Approve purchase
+- `get_order_status` - Check order status
+- `simulate_time` - Advance order state
+- `trigger_chaos_case` - Enable chaos scenarios
+
+**Example Configuration** (`.vscode/mcp.json`):
+```json
+{
+  "mcpServers": {
+    "cartpilot": {
+      "url": "https://cartpilot-mcp-xxxx.run.app/sse"
+    }
+  }
+}
+```
+
+### 2. ChatGPT Actions
+
+Integrate CartPilot with ChatGPT using OpenAPI specification.
+
+**Setup:**
+
+1. Deploy CartPilot API to Cloud Run
+2. Update `docs/openapi.yaml` with your API URL
+3. Create Custom GPT in ChatGPT:
+   - Go to ChatGPT Custom GPTs
+   - Add Action → Import OpenAPI schema
+   - Configure authentication (Bearer token)
+   - Add API key
+
+**Features:**
+- Natural language purchase intents
+- Product search across merchants
+- Checkout approval workflow
+- Order tracking
+
+For detailed instructions, see [ChatGPT Actions Guide](docs/CHATGPT_ACTIONS.md).
+
+### 3. Gemini Function Calling
+
+Use CartPilot with Google Gemini via Function Calling.
+
+**Setup:**
+
+```bash
+# Install dependencies
+pip install -r integrations/requirements.txt
+
+# Set environment variables
+export GEMINI_API_KEY="your-gemini-api-key"
+export CARTPILOT_API_URL="https://cartpilot-api-xxxx.run.app"
+export CARTPILOT_API_KEY="your-cartpilot-api-key"
+```
+
+**Usage:**
+
+```python
+from integrations.gemini_client import CartPilotGeminiClient
+import google.generativeai as genai
+
+# Initialize
+genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+client = CartPilotGeminiClient(
+    cartpilot_api_url=os.getenv("CARTPILOT_API_URL"),
+    api_key=os.getenv("CARTPILOT_API_KEY")
+)
+
+# Get functions for Gemini
+functions = client.get_function_declarations()
+
+# Create model with functions
+model = genai.GenerativeModel(
+    model_name="gemini-1.5-pro",
+    tools=[{"function_declarations": functions}]
+)
+
+# Use in chat
+chat = model.start_chat()
+response = chat.send_message("I need wireless headphones under $100")
+
+# Handle function calls
+for candidate in response.candidates:
+    for part in candidate.content.parts:
+        if hasattr(part, "function_call") and part.function_call:
+            result = await client.handle_function_call(part.function_call)
+            # Send result back to Gemini
+            chat.send_message(genai.protos.FunctionResponse(
+                name=result["name"],
+                response=result["response"]
+            ))
+```
+
+**Interactive Example:**
+
+```bash
+python integrations/example_chat.py
+```
+
+For detailed documentation, see [Gemini Integration Guide](integrations/README.md).
+
+### Integration Comparison
+
+| Feature | MCP Server | ChatGPT Actions | Gemini Function Calling |
+|---------|------------|-----------------|------------------------|
+| **Protocol** | MCP SSE | OpenAPI REST | Function Calling |
+| **Best For** | Claude, Cline | ChatGPT | Gemini |
+| **Setup** | Configure URL | Import OpenAPI | Python client |
+| **Tools/Functions** | 8 tools | 15+ endpoints | 11 functions |
+| **Approval Flow** | ✅ | ✅ | ✅ |
+| **Order Tracking** | ✅ | ✅ | ✅ |
+
+## Additional Documentation
+
+- [GCP Deployment Guide](deploy/gcp/README.md) - Detailed GCP deployment instructions
+- [ChatGPT Actions Guide](docs/CHATGPT_ACTIONS.md) - ChatGPT integration setup
+- [Gemini Integration Guide](integrations/README.md) - Gemini Function Calling guide
+- [OpenAPI Specification](docs/openapi.yaml) - Complete API specification
+- [Docker Optimization](deploy/DOCKER_OPTIMIZATION.md) - Production Dockerfile details
+- [Local Compatibility](deploy/LOCAL_COMPATIBILITY.md) - Local development notes
+
 ## License
 
 MIT
