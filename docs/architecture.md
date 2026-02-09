@@ -10,28 +10,28 @@ CartPilot is an **agent-first commerce orchestration backend** designed to provi
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                         Client Layer                             │
+│                         Client Layer                            │
 ├─────────────────────────────────────────────────────────────────┤
 │  AI Agents (Claude, ChatGPT, Gemini)  │  REST Clients (Postman) │
-└──────────────┬────────────────────────┴──────────────┬───────────┘
+└──────────────┬────────────────────────┴──────────────┬──────────┘
                │                                       │
                │ MCP Protocol                          │ REST API
-               │ (SSE/stdio)                           │ (HTTP)
+               │ (SSE/stdio)                           │ (HTTPS)
                ▼                                       ▼
-┌──────────────────────────┐              ┌──────────────────────────┐
+┌──────────────────────────┐              ┌────────────────────────-──┐
 │   CartPilot MCP Server   │              │    CartPilot API          │
 │   (cartpilot-mcp)        │              │    (cartpilot-api)        │
 │                          │              │                           │
-│  - MCP Tools Adapter     │──────────────│  - FastAPI Application   │
-│  - SSE/stdio Transport   │  HTTP       │  - Domain Logic           │
-│  - Tool Orchestration    │              │  - State Machines        │
+│  - MCP Tools Adapter     │──────────────│  - FastAPI Application    │
+│  - SSE/stdio Transport   │  HTTPS       │  - Domain Logic           │
+│  - Tool Orchestration    │              │  - State Machines         │
 └──────────────────────────┘              │  - Business Rules         │
                                           └───────────┬───────────────┘
                                                       │
                                                       │ SQLAlchemy
                                                       │ AsyncPG
                                                       ▼
-                                          ┌──────────────────────────┐
+                                          ┌──────────────────────-────┐
                                           │    PostgreSQL Database    │
                                           │    (cartpilot-db)         │
                                           │                           │
@@ -43,13 +43,13 @@ CartPilot is an **agent-first commerce orchestration backend** designed to provi
                                           └──────────────────────────┘
                                                       │
                                                       │
-                          ┌──────────────────────────┴───────────────┐
-                          │                                          │
-                          │ HTTP                                     │ HTTP
-                          ▼                                          ▼
-              ┌──────────────────────┐              ┌──────────────────────┐
+                          ┌─────────────────────────-─┴───────────────┐
+                          │                                           │
+                          │ UCP/HTTPS                                 │ UCP/HTTPS
+                          ▼                                           ▼
+              ┌─────────────────────-─┐              ┌─────────────────────-─┐
               │    Merchant A         │              │    Merchant B         │
-              │    (merchant-a)       │              │    (merchant-b)        │
+              │    (merchant-a)       │              │    (merchant-b)       │
               │                       │              │                       │
               │  - Happy Path         │              │  - Chaos Mode         │
               │  - Product Catalog    │              │  - Edge Cases         │
