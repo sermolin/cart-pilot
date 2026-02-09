@@ -18,13 +18,13 @@ CartPilot provides a stable, deterministic backend for AI assistants to perform 
 ┌─────────────────┐     ┌─────────────────┐
 │   AI Agent      │────▶│  CartPilot MCP  │
 └─────────────────┘     └────────┬────────┘
-                                │
+                                MCP
 ┌─────────────────┐     ┌────────▼────────┐     ┌─────────────────┐
 │    Postman      │────▶│  CartPilot API  │────▶│   PostgreSQL    │
 └─────────────────┘     └────────┬────────┘     └─────────────────┘
-                                │
-                   ┌────────────┴────────────┐
-                   ▼                         ▼
+                                UCP
+                   ┌────────────-┴────────────┐
+                   ▼                          ▼
           ┌───────────────┐         ┌───────────────┐
           │  Merchant A   │         │  Merchant B   │
           │ (Happy Path)  │         │ (Chaos Mode)  │
