@@ -104,7 +104,7 @@ brew install python@3.11
 
 **Verify installation:**
 ```bash
-python3.11 --version
+python3 --version
 ```
 
 **Expected output:**
@@ -158,6 +158,10 @@ brew install jq
 **Verify installation:**
 ```bash
 jq --version
+```
+**Expected output:**
+```
+jq-1.8.1
 ```
 
 ---
